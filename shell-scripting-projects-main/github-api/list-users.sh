@@ -1,62 +1,57 @@
 #!/bin/bash
 
-# -----------------------
-# GitHub Collaborators Access Checker
-# -----------------------
+API_URL="https://api.github.com"
 
-# Validate environment variables
-if [[ -z "${GITHUB_USERNAME}" || -z "${GITHUB_TOKEN}" ]]; then
-    echo "❌ Environment variables GITHUB_USERNAME and/or GITHUB_TOKEN are not set."
-    echo "Please export them before running this script:"
-    echo "  export GITHUB_USERNAME='your-username'"
-    echo "  export GITHUB_TOKEN='your-token'"
-    exit 1
-fi
+# GitHub username and personal access token (set these before running)
+USERNAME=$username
+TOKEN=$token
 
-# Validate input arguments
-if [[ $# -ne 2 ]]; then
-    echo "Please enter the organization name followed by the repository name."
-    echo "Usage: $0 <org_name> <repo_name>"
-    exit 1
-fi
+# Main script execution
+check_args "$@"
 
-# Assign arguments
-REPO_OWNER="$1"
-REPO_NAME="$2"
+REPO_OWNER=$1
+REPO_NAME=$2
 
-# GitHub API GET function
-function github_api_get {
-    local url="https://api.github.com/$1"
-    curl -s -u "${GITHUB_USERNAME}:${GITHUB_TOKEN}" "$url"
+# Check if two arguments are provided
+function check_args {
+    if [[ $# -ne 2 ]]; then
+        echo "Please provide the organization name followed by the repository name."
+        exit 1
+    fi
 }
 
-# Main function to list collaborators and access levels
-function list_collaborators_with_permissions {
-    local endpoint="repos/${REPO_OWNER}/${REPO_NAME}/collaborators?per_page=100"
+# Function to make a GET request to the GitHub API
+function github_api_get {
+    local endpoint="$1"
+    local url="${API_URL}/${endpoint}"
+    curl -s -u "${USERNAME}:${TOKEN}" "$url"
+}
 
-    echo "Fetching collaborators for ${REPO_OWNER}/${REPO_NAME}..."
-    response=$(github_api_get "$endpoint")
+# Function to list collaborators with their access level
+function list_collaborators_with_access {
+    local endpoint="repos/${REPO_OWNER}/${REPO_NAME}/collaborators"
+    local response=$(github_api_get "$endpoint")
 
-    # Check if response is an array
-    if ! echo "$response" | jq -e 'type == "array"' > /dev/null; then
-        echo "❌ GitHub API response is invalid. Check repo/org name or credentials."
-        echo "Raw response: $response"
+    # Check if response is valid JSON array
+    if ! echo "$response" | jq -e 'type == "array"' >/dev/null 2>&1; then
+        echo "GitHub API response is invalid. Check repo/org name or credentials."
         exit 1
     fi
 
-    collaborators=$(echo "$response" | jq -r '.[] | [.login, .permissions.admin, .permissions.push, .permissions.pull] | @tsv')
+    local collaborators=$(echo "$response" | jq -r '.[] | "\(.login) \(.permissions.admin) \(.permissions.push) \(.permissions.pull)"')
 
     if [[ -z "$collaborators" ]]; then
-        echo "ℹ️ No collaborators found or insufficient permissions."
+        echo "No collaborators found for ${REPO_OWNER}/${REPO_NAME}."
         exit 0
     fi
 
-    echo
-    echo "Collaborators and their access:"
-    printf "%-20s %-10s\n" "Username" "Access"
-    echo "---------------------------------------"
+    echo "Collaborators and their access levels for ${REPO_OWNER}/${REPO_NAME}:"
+    for collaborator in $collaborators; do
+        login=$(echo $collaborator | awk '{print $1}')
+        admin=$(echo $collaborator | awk '{print $2}')
+        write=$(echo $collaborator | awk '{print $3}')
+        read=$(echo $collaborator | awk '{print $4}')
 
-    while IFS=$'\t' read -r login admin write read; do
         if [[ "$admin" == "true" ]]; then
             access="admin"
         elif [[ "$write" == "true" ]]; then
@@ -64,11 +59,12 @@ function list_collaborators_with_permissions {
         elif [[ "$read" == "true" ]]; then
             access="read"
         else
-            access="unknown"
+            access="none"
         fi
-        printf "%-20s %-10s\n" "$login" "$access"
-    done <<< "$collaborators"
+
+        echo "$login: $access"
+    done
 }
 
-# Run the function
-list_collaborators_with_permissions
+
+list_collaborators_with_access
