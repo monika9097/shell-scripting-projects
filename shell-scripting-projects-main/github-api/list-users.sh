@@ -6,12 +6,6 @@ API_URL="https://api.github.com"
 USERNAME=$username
 TOKEN=$token
 
-# Main script execution
-check_args "$@"
-
-REPO_OWNER=$1
-REPO_NAME=$2
-
 # Check if two arguments are provided
 function check_args {
     if [[ $# -ne 2 ]]; then
@@ -66,5 +60,10 @@ function list_collaborators_with_access {
     done
 }
 
+# Main script execution
+check_args "$@"
+
+REPO_OWNER=$1
+REPO_NAME=$2
 
 list_collaborators_with_access
