@@ -26,7 +26,6 @@ function list_collaborators_with_access {
     local endpoint="repos/${REPO_OWNER}/${REPO_NAME}/collaborators"
     local response=$(github_api_get "$endpoint")
 
-    # Check if response is valid JSON array
     if ! echo "$response" | jq -e 'type == "array"' >/dev/null 2>&1; then
         echo "GitHub API response is invalid. Check repo/org name or credentials."
         exit 1
@@ -40,12 +39,7 @@ function list_collaborators_with_access {
     fi
 
     echo "Collaborators and their access levels for ${REPO_OWNER}/${REPO_NAME}:"
-    for collaborator in $collaborators; do
-        login=$(echo $collaborator | awk '{print $1}')
-        admin=$(echo $collaborator | awk '{print $2}')
-        write=$(echo $collaborator | awk '{print $3}')
-        read=$(echo $collaborator | awk '{print $4}')
-
+    echo "$collaborators" | while read -r login admin write read; do
         if [[ "$admin" == "true" ]]; then
             access="admin"
         elif [[ "$write" == "true" ]]; then
@@ -55,7 +49,6 @@ function list_collaborators_with_access {
         else
             access="none"
         fi
-
         echo "$login: $access"
     done
 }
