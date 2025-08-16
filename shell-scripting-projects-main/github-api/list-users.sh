@@ -1,43 +1,53 @@
 #!/bin/bash
 
-# GitHub authentication
-USERNAME="your-github-username"
-TOKEN="your-personal-access-token"
+# -----------------------
+# GitHub Collaborators Access Checker
+# -----------------------
 
-# 🔐 Validate input arguments
+# Validate environment variables
+if [[ -z "${GITHUB_USERNAME}" || -z "${GITHUB_TOKEN}" ]]; then
+    echo "❌ Environment variables GITHUB_USERNAME and/or GITHUB_TOKEN are not set."
+    echo "Please export them before running this script:"
+    echo "  export GITHUB_USERNAME='your-username'"
+    echo "  export GITHUB_TOKEN='your-token'"
+    exit 1
+fi
+
+# Validate input arguments
 if [[ $# -ne 2 ]]; then
     echo "Please enter the organization name followed by the repository name."
     echo "Usage: $0 <org_name> <repo_name>"
     exit 1
 fi
 
-# Assign command-line arguments
+# Assign arguments
 REPO_OWNER="$1"
 REPO_NAME="$2"
 
-# Function to call GitHub API
+# GitHub API GET function
 function github_api_get {
     local url="https://api.github.com/$1"
-    curl -s -u "${USERNAME}:${TOKEN}" "$url"
+    curl -s -u "${GITHUB_USERNAME}:${GITHUB_TOKEN}" "$url"
 }
 
-# Function to list collaborators
+# Main function to list collaborators and access levels
 function list_collaborators_with_permissions {
     local endpoint="repos/${REPO_OWNER}/${REPO_NAME}/collaborators?per_page=100"
 
     echo "Fetching collaborators for ${REPO_OWNER}/${REPO_NAME}..."
     response=$(github_api_get "$endpoint")
 
-    # Check if API returned an array
+    # Check if response is an array
     if ! echo "$response" | jq -e 'type == "array"' > /dev/null; then
-        echo "GitHub API response is invalid. Check repo/org name or credentials."
+        echo "❌ GitHub API response is invalid. Check repo/org name or credentials."
+        echo "Raw response: $response"
         exit 1
     fi
 
     collaborators=$(echo "$response" | jq -r '.[] | [.login, .permissions.admin, .permissions.push, .permissions.pull] | @tsv')
 
     if [[ -z "$collaborators" ]]; then
-        echo "No collaborators found or insufficient permissions."
+        echo "ℹ️ No collaborators found or insufficient permissions."
         exit 0
     fi
 
@@ -60,5 +70,5 @@ function list_collaborators_with_permissions {
     done <<< "$collaborators"
 }
 
-# Call the main function
+# Run the function
 list_collaborators_with_permissions
