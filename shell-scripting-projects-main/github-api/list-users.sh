@@ -4,14 +4,16 @@
 USERNAME="your-github-username"
 TOKEN="your-personal-access-token"
 
-# Helper function to validate input
-function validate_input {
-    if [[ $# -ne 2 ]]; then
-        echo "Please enter the organization name followed by the repository name."
-        echo "Usage: $0 <org_name> <repo_name>"
-        exit 1
-    fi
-}
+# 🔐 Validate input arguments
+if [[ $# -ne 2 ]]; then
+    echo "Please enter the organization name followed by the repository name."
+    echo "Usage: $0 <org_name> <repo_name>"
+    exit 1
+fi
+
+# Assign command-line arguments
+REPO_OWNER="$1"
+REPO_NAME="$2"
 
 # Function to call GitHub API
 function github_api_get {
@@ -19,18 +21,24 @@ function github_api_get {
     curl -s -u "${USERNAME}:${TOKEN}" "$url"
 }
 
-# Function to list collaborators and their permissions
+# Function to list collaborators
 function list_collaborators_with_permissions {
     local endpoint="repos/${REPO_OWNER}/${REPO_NAME}/collaborators?per_page=100"
 
     echo "Fetching collaborators for ${REPO_OWNER}/${REPO_NAME}..."
     response=$(github_api_get "$endpoint")
 
+    # Check if API returned an array
+    if ! echo "$response" | jq -e 'type == "array"' > /dev/null; then
+        echo "GitHub API response is invalid. Check repo/org name or credentials."
+        exit 1
+    fi
+
     collaborators=$(echo "$response" | jq -r '.[] | [.login, .permissions.admin, .permissions.push, .permissions.pull] | @tsv')
 
     if [[ -z "$collaborators" ]]; then
-        echo "No collaborators found or invalid repository/org name."
-        exit 1
+        echo "No collaborators found or insufficient permissions."
+        exit 0
     fi
 
     echo
@@ -52,14 +60,5 @@ function list_collaborators_with_permissions {
     done <<< "$collaborators"
 }
 
-# -------------------- MAIN --------------------
-
-# Validate input arguments
-validate_input "$@"
-
-# Assign command-line arguments
-REPO_OWNER="$1"
-REPO_NAME="$2"
-
-# Run the main function
+# Call the main function
 list_collaborators_with_permissions
